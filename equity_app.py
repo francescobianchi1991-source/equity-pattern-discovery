@@ -1,8 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║  EQUITY PATTERN DISCOVERY — Web App Demo                     ║
-║  Alternative Quant Framework — Azionario Italia              ║
-║  Streamlit dark-mode dashboard per SGR/SIM italiane          ║
+║  EQUITY PATTERN DISCOVERY — Tool Interattivo                 ║
+║  Framework Analisi Quantitativa — Azionario Italia           ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Installazione:
@@ -10,12 +9,6 @@ Installazione:
 
 Avvio:
     streamlit run equity_app.py
-
-Sidebar — sezioni:
-    📊  Overview              — KPI generali universo
-    📉  Mean Reversion        — Shock Down pattern (shock_down_mr)
-    📖  Metodologia           — spiegazione framework
-    📤  Export                — download risultati
 """
 
 import streamlit as st
@@ -23,17 +16,14 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from scipy import stats
+from scipy import stats as spstats
 import yfinance as yf
 import warnings
 import io
-from datetime import datetime
+from datetime import datetime, date
 
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Equity Pattern Discovery",
     page_icon="📊",
@@ -41,221 +31,51 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────────────────────
-# CSS — Dark mode, stessa palette della weather app
-# ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap');
-
 :root {
-    --bg-primary:    #0a0e17;
-    --bg-secondary:  #111827;
-    --bg-card:       #151d2e;
-    --border:        #1e2d47;
-    --border-bright: #2a3f63;
-    --text-primary:  #e8edf5;
-    --text-secondary:#8a9ab5;
-    --text-dim:      #4a5a75;
-    --accent-blue:   #3b82f6;
-    --accent-cyan:   #06b6d4;
-    --accent-green:  #10b981;
-    --accent-red:    #ef4444;
-    --accent-amber:  #f59e0b;
-    --accent-purple: #8b5cf6;
+    --bg-primary:#0a0e17; --bg-secondary:#111827; --bg-card:#151d2e;
+    --border:#1e2d47; --border-bright:#2a3f63;
+    --text-primary:#e8edf5; --text-secondary:#8a9ab5; --text-dim:#4a5a75;
+    --accent-blue:#3b82f6; --accent-cyan:#06b6d4; --accent-green:#10b981;
+    --accent-red:#ef4444; --accent-amber:#f59e0b; --accent-purple:#8b5cf6;
 }
-
 .stApp { background: var(--bg-primary); color: var(--text-primary); }
 .main .block-container { padding: 1.5rem 2rem; max-width: 1600px; }
 #MainMenu, footer, header { visibility: hidden; }
 .stDeployButton { display: none; }
-
-[data-testid="stSidebar"] {
-    background: var(--bg-secondary) !important;
-    border-right: 1px solid var(--border);
-}
-[data-testid="stSidebar"] .stRadio label {
-    color: var(--text-secondary) !important;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
-}
-
-h1, h2, h3 {
-    font-family: 'Syne', sans-serif !important;
-    color: var(--text-primary) !important;
-    letter-spacing: -0.02em;
-}
-p, div, span, label { font-family: 'JetBrains Mono', monospace; }
-
-.kpi-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.2rem 1.4rem;
-    position: relative;
-    overflow: hidden;
-}
-.kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
-}
-.kpi-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.68rem;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    margin-bottom: 0.5rem;
-}
-.kpi-value {
-    font-family: 'Syne', sans-serif;
-    font-size: 2rem;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 0.3rem;
-}
-.kpi-sub {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--text-secondary);
-}
-
-.section-header {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.7rem;
-    color: var(--accent-cyan);
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 0.5rem;
-    margin: 1.5rem 0 1rem 0;
-}
-
-.top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.8rem 0;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 1.5rem;
-}
-.top-bar-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.4rem;
-    font-weight: 800;
-    color: var(--text-primary);
-    letter-spacing: -0.03em;
-}
-.top-bar-meta {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--text-dim);
-}
-
-.pattern-badge {
-    display: inline-block;
-    padding: 0.3rem 0.9rem;
-    border-radius: 4px;
-    font-family: 'Syne', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    background: rgba(139,92,246,0.15);
-    color: #a78bfa;
-    border: 1px solid #8b5cf6;
-}
-
-.method-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.4rem;
-    margin-bottom: 1rem;
-}
-.method-card h4 {
-    font-family: 'Syne', sans-serif !important;
-    font-size: 1rem;
-    color: var(--accent-cyan) !important;
-    margin-bottom: 0.8rem;
-}
-.method-card p {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    line-height: 1.7;
-}
-
-.disclaimer {
-    background: rgba(245,158,11,0.05);
-    border: 1px solid rgba(245,158,11,0.2);
-    border-left: 3px solid var(--accent-amber);
-    border-radius: 4px;
-    padding: 0.8rem 1rem;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--text-secondary);
-    margin-top: 1rem;
-}
-
-.chain-box {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-bright);
-    border-radius: 6px;
-    padding: 1rem 1.5rem;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.8rem;
-    color: var(--accent-cyan);
-    text-align: center;
-    letter-spacing: 0.05em;
-    margin: 1rem 0;
-}
-
-.dot-live {
-    display: inline-block;
-    width: 7px; height: 7px;
-    background: var(--accent-green);
-    border-radius: 50%;
-    margin-right: 6px;
-    animation: pulse 2s infinite;
-}
-@keyframes pulse {
-    0%,100% { opacity: 1; }
-    50%      { opacity: 0.3; }
-}
+[data-testid="stSidebar"] { background: var(--bg-secondary) !important; border-right: 1px solid var(--border); }
+[data-testid="stSidebar"] .stRadio label { color: var(--text-secondary) !important; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+h1,h2,h3 { font-family: 'Syne', sans-serif !important; color: var(--text-primary) !important; letter-spacing: -0.02em; }
+p,div,span,label { font-family: 'JetBrains Mono', monospace; }
+.kpi-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem 1.4rem; position: relative; overflow: hidden; }
+.kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan)); }
+.kpi-label { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.5rem; }
+.kpi-value { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 700; line-height: 1; margin-bottom: 0.3rem; }
+.kpi-sub { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-secondary); }
+.section-header { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.2em; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; margin: 1.5rem 0 1rem 0; }
+.step-card { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--accent-purple); border-radius: 8px; padding: 1.2rem 1.4rem; margin-bottom: 1rem; }
+.step-card h4 { font-family: 'Syne', sans-serif !important; font-size: 1rem; color: var(--accent-cyan) !important; margin-bottom: 0.6rem; }
+.step-card p { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.6; margin: 0; }
+.top-bar { display: flex; align-items: center; justify-content: space-between; padding: 0.8rem 0; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+.top-bar-title { font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 800; color: var(--text-primary); letter-spacing: -0.03em; }
+.top-bar-meta { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-dim); }
+.disclaimer { background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.2); border-left: 3px solid #f59e0b; border-radius: 4px; padding: 0.8rem 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-secondary); margin-top: 1rem; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────
-# COSTANTI
-# ─────────────────────────────────────────────────────────────
-
-# Universo azionario Italia — FTSE MIB + Mid Cap principali
-ITALIAN_TICKERS = [
+# ── Costanti ──────────────────────────────────────────────────
+DEFAULT_TICKERS = [
     "ENI.MI","ENEL.MI","ISP.MI","UCG.MI","TIT.MI","STLAM.MI",
     "MB.MI","PRY.MI","SRG.MI","AMP.MI","G.MI","SPM.MI",
-    "BMED.MI","BPSO.MI","CPR.MI","CNHI.MI","DIA.MI","ERG.MI",
-    "FCA.MI","FBK.MI","HER.MI","INW.MI","LDO.MI","MONC.MI",
-    "PIRC.MI","RACE.MI","REC.MI","SAP.MI","SFER.MI","TRN.MI",
+    "BMED.MI","BPSO.MI","CPR.MI","CNHI.MI","ERG.MI","FBK.MI",
+    "HER.MI","LDO.MI","MONC.MI","RACE.MI","REC.MI","SAP.MI",
+    "TRN.MI","A2A.MI","IREN.MI","BZU.MI","PST.MI","INW.MI",
 ]
-
-# Parametri pattern shock_down_mr (best params dal backtest)
-SHOCK_PARAMS = {
-    "W":    5,      # finestra return cumulativo (giorni)
-    "Wz":   252,    # finestra rolling per z-score
-    "zsog": -2.0,   # soglia z-score (sotto = candidato)
-    "cp":   0.35,   # close position in range (filtro aggiuntivo)
-    "H":    10,     # orizzonte forward return
-}
-
-START_DATE = "2015-01-01"
-END_DATE   = datetime.today().strftime("%Y-%m-%d")
-HORIZONS   = [3, 5, 10, 15]
-
+HORIZONS = [3, 5, 10, 15, 20]
 PLOTLY_DARK = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(21,29,46,0.6)",
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(21,29,46,0.6)",
     font=dict(family="JetBrains Mono", color="#8a9ab5", size=11),
     xaxis=dict(gridcolor="#1e2d47", linecolor="#1e2d47", tickfont=dict(size=10)),
     yaxis=dict(gridcolor="#1e2d47", linecolor="#1e2d47", tickfont=dict(size=10)),
@@ -263,812 +83,572 @@ PLOTLY_DARK = dict(
     margin=dict(l=50, r=20, t=40, b=40),
 )
 
-# ─────────────────────────────────────────────────────────────
-# DATA PIPELINE
-# ─────────────────────────────────────────────────────────────
+# ── Session state ─────────────────────────────────────────────
+for k, v in {
+    "ohlcv":None,"features":None,"pat_df":None,"canoni":None,
+    "stats":None,"pat_params":None,"n_tickers_ok":0,
+    "start_date":"2018-01-01","end_date":datetime.today().strftime("%Y-%m-%d"),
+    "step_data":False,"step_feat":False,"step_pattern":False,
+}.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def load_ohlcv(tickers, start, end):
-    """Scarica dati OHLCV per l'universo Italia."""
+# ── Pipeline functions ────────────────────────────────────────
+
+def download_ohlcv(tickers, start, end):
     frames = []
-    for ticker in tickers:
+    bar = st.progress(0, text="Download in corso...")
+    for i, t in enumerate(tickers):
         try:
-            df = yf.download(ticker, start=start, end=end,
-                             auto_adjust=True, progress=False)
-            if df.empty or len(df) < 100:
+            df = yf.download(t, start=start, end=end, auto_adjust=True, progress=False)
+            if df.empty or len(df) < 60:
                 continue
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.droplevel(1)
-            df = df[["Open","High","Low","Close","Volume"]].copy()
-            df.columns = ["open","high","low","close","volume"]
+            cols = [c for c in ["Open","High","Low","Close","Volume"] if c in df.columns]
+            df = df[cols].copy()
+            df.columns = [c.lower() for c in df.columns]
             df.index.name = "date"
             df = df.reset_index()
-            df["ticker"] = ticker
+            df["ticker"] = t
             df["date"] = pd.to_datetime(df["date"])
             df = df.dropna(subset=["close"])
-            frames.append(df)
+            df["_r"] = df["close"].pct_change()
+            df = df[df["_r"].abs() < 1.0].drop(columns=["_r"])
+            if len(df) >= 60:
+                frames.append(df)
         except Exception:
-            continue
+            pass
+        bar.progress((i+1)/len(tickers), text=f"{i+1}/{len(tickers)}: {t}")
+    bar.empty()
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True).sort_values(["ticker","date"])
 
 
-def build_features(df):
-    """Costruisce feature primitive per il pattern discovery."""
-    df = df.copy().sort_values(["ticker","date"])
-    grp = df.groupby("ticker")
-
-    # Return giornaliero
-    df["ret_1d"] = grp["close"].transform(lambda x: x.pct_change())
-
-    # Pulizia outlier: rimuovi variazioni > 100% in un giorno
-    df = df[df["ret_1d"].abs() < 1.0].copy()
-
-    # Volume ratio
-    df["vol_ratio"] = grp["volume"].transform(
-        lambda x: x / x.rolling(20, min_periods=10).mean()
-    )
-
-    # Close position in range (dove chiude nel range high-low)
-    df["close_pos_in_range"] = np.where(
-        (df["high"] - df["low"]) > 0,
-        (df["close"] - df["low"]) / (df["high"] - df["low"]),
-        0.5
-    )
-
-    # Forward returns per H = 3,5,10,15 — winsorizzati ±50%
-    for H in HORIZONS:
-        fwd = grp["close"].transform(
-            lambda x: x.shift(-H) / x - 1
-        )
-        df[f"fwd_ret_t{H}"] = fwd.clip(-0.5, 0.5)
-
+def build_features(ohlcv, h_max=20):
+    df = ohlcv.copy().sort_values(["ticker","date"])
+    g  = df.groupby("ticker")
+    df["prev_close"]  = g["close"].transform(lambda x: x.shift(1))
+    df["ret_1d"]      = g["close"].transform(lambda x: x.pct_change())
+    df["delta_close"] = df["close"] - df["prev_close"]
+    if all(c in df.columns for c in ["open","high","low","close"]):
+        df["range_day"]          = df["high"] - df["low"]
+        df["body"]               = df["close"] - df["open"]
+        df["body_abs"]           = df["body"].abs()
+        df["lower_shadow"]       = df[["open","close"]].min(axis=1) - df["low"]
+        df["upper_shadow"]       = df["high"] - df[["open","close"]].max(axis=1)
+        df["close_pos_in_range"] = np.where(df["range_day"]>0, (df["close"]-df["low"])/df["range_day"], 0.5)
+        df["body_range_ratio"]   = np.where(df["range_day"]>0, df["body_abs"]/df["range_day"], 0.0)
+        df["gap_abs"]  = df["open"] - df["prev_close"]
+        df["gap_pct"]  = np.where(df["prev_close"]>0, df["gap_abs"]/df["prev_close"], 0.0)
+        df["true_range"] = np.maximum(df["high"]-df["low"],
+                           np.maximum((df["high"]-df["prev_close"]).abs(),
+                                      (df["low"] -df["prev_close"]).abs()))
+    if "volume" in df.columns:
+        df["vol_ratio"] = g["volume"].transform(lambda x: x / x.rolling(20, min_periods=10).mean())
+    for H in range(1, h_max+1):
+        df[f"fwd_ret_t{H}"] = g["close"].transform(lambda x: (x.shift(-H)/x - 1).clip(-0.5, 0.5))
     return df.dropna(subset=["ret_1d"])
 
 
-def detect_shock_down(df, params=SHOCK_PARAMS):
-    """
-    Identifica episodi Shock Down Mean Reversion.
-
-    Logica:
-    - Calcola return cumulativo su W giorni
-    - Normalizza con z-score rolling (finestra Wz)
-    - Candidato quando z < zsog (shock negativo anomalo)
-    - Filtro aggiuntivo: close nel bottom cp% del range giornaliero
-    - Canone: candidato confermato con min gap 5gg tra episodi
-    """
-    W    = params["W"]
-    Wz   = params["Wz"]
-    zsog = params["zsog"]
-    cp   = params["cp"]
-
+def detect_shock_down(features, params):
+    W, Wz, zsog, cp, min_gap = params["W"], params["Wz"], params["zsog"], params["cp"], params["min_gap"]
     results = []
-    for ticker, grp in df.groupby("ticker"):
+    for ticker, grp in features.groupby("ticker"):
         g = grp.copy().sort_values("date").reset_index(drop=True)
-
-        # Return cumulativo
         cum_ret = g["close"].pct_change(W)
-
-        # Z-score rolling
         mu  = cum_ret.rolling(Wz, min_periods=60).mean()
         sig = cum_ret.rolling(Wz, min_periods=60).std()
         z   = (cum_ret - mu) / sig.replace(0, np.nan)
-
-        # Candidato
         cand = (z < zsog).astype(int)
-
-        # Filtro close position
         if cp < 1.0 and "close_pos_in_range" in g.columns:
             cand = cand & (g["close_pos_in_range"] < cp)
-
-        g["z_score"]    = z
+        g["z_score_mr"] = z
         g["is_cand"]    = cand.fillna(0).astype(int)
-
-        # Canone: almeno 5 giorni di gap tra episodi (evita cluster)
-        is_canone = []
-        last_ep   = -999
-        for i, row in g.iterrows():
-            if row["is_cand"] == 1 and (i - last_ep) >= 5:
-                is_canone.append(1)
-                last_ep = i
+        canone, last_ep = [], -999
+        for i in range(len(g)):
+            if g.loc[i,"is_cand"]==1 and (i-last_ep)>=min_gap:
+                canone.append(1); last_ep = i
             else:
-                is_canone.append(0)
-        g["is_canone"] = is_canone
-
+                canone.append(0)
+        g["is_canone_shock_down"] = canone
         results.append(g)
-
     return pd.concat(results, ignore_index=True)
 
 
-def compute_pattern_stats(df_pat, horizons=HORIZONS):
-    """
-    Calcola statistiche di performance per i canoni del pattern.
-    Restituisce metriche per ogni orizzonte H.
-    """
-    canoni = df_pat[df_pat["is_canone"] == 1].copy()
-    baseline_all = df_pat.copy()
-
-    stats_out = {}
+def compute_stats(pat_df, canoni, horizons=HORIZONS):
+    out = {}
     for H in horizons:
-        fwd_col = f"fwd_ret_t{H}"
-        if fwd_col not in canoni.columns:
+        fc = f"fwd_ret_t{H}"
+        if fc not in pat_df.columns:
             continue
-
-        y_can  = canoni[fwd_col].dropna()
-        y_all  = baseline_all[fwd_col].dropna()
-
-        if len(y_can) < 10:
+        yc = canoni[fc].dropna()
+        ya = pat_df[fc].dropna()
+        if len(yc) < 5:
             continue
+        avg_ret = float(yc.mean())
+        avg_base = float(ya.mean())
+        hr  = float((yc>0).mean())
+        lift = avg_ret/avg_base if avg_base!=0 else np.nan
+        t, p = spstats.ttest_1samp(yc, 0)
+        per_tk = []
+        for tk, grp in pat_df.groupby("ticker"):
+            c = grp[grp["is_canone_shock_down"]==1][fc].dropna()
+            if len(c)>=3:
+                per_tk.append({"ticker":tk.replace(".MI",""),"n":len(c),"avg_ret":float(c.mean()),"hit_rate":float((c>0).mean())})
+        per_tk_df = pd.DataFrame(per_tk).sort_values("avg_ret",ascending=False) if per_tk else pd.DataFrame()
+        tmp = canoni.copy(); tmp["year"] = tmp["date"].dt.year
+        at  = pat_df.copy();  at["year"]  = at["date"].dt.year
+        yr_c = tmp.groupby("year")[fc].mean()
+        yr_b = at.groupby("year")[fc].mean()
+        lift_yr = (yr_c/yr_b).replace([np.inf,-np.inf],np.nan).dropna()
+        out[H] = {"n_canoni":len(yc),"avg_ret":avg_ret,"avg_baseline":avg_base,
+                  "hit_rate":hr,"lift":lift,"t_stat":float(t),"p_val":float(p),
+                  "sig":float(p)<0.10,"per_ticker":per_tk_df,
+                  "lift_yr":lift_yr,"n_yr":tmp.groupby("year").size()}
+    return out
 
-        avg_ret      = float(y_can.mean())
-        avg_baseline = float(y_all.mean())
-        hit_rate     = float((y_can > 0).mean())
-        lift         = avg_ret / avg_baseline if avg_baseline != 0 else np.nan
-        t_stat, p_val = stats.ttest_1samp(y_can, 0)
-
-        # Per ticker
-        per_ticker = []
-        for ticker, grp in df_pat.groupby("ticker"):
-            c = grp[grp["is_canone"]==1][fwd_col].dropna()
-            if len(c) >= 3:
-                per_ticker.append({
-                    "ticker": ticker,
-                    "n": len(c),
-                    "avg_ret": c.mean(),
-                    "hit_rate": (c>0).mean(),
-                })
-
-        stats_out[H] = {
-            "n_canoni":    len(y_can),
-            "avg_ret":     avg_ret,
-            "avg_baseline":avg_baseline,
-            "hit_rate":    hit_rate,
-            "lift":        lift,
-            "t_stat":      t_stat,
-            "p_val":       p_val,
-            "sig":         p_val < 0.10,
-            "per_ticker":  pd.DataFrame(per_ticker).sort_values("avg_ret", ascending=False) if per_ticker else pd.DataFrame(),
-        }
-
-    return stats_out, canoni
-
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def build_all_data():
-    """Pipeline completa: download → features → pattern → stats."""
-    ohlcv    = load_ohlcv(ITALIAN_TICKERS, START_DATE, END_DATE)
-    if ohlcv.empty:
-        return None
-    features = build_features(ohlcv)
-    pat_df   = detect_shock_down(features, SHOCK_PARAMS)
-    pat_stats, canoni = compute_pattern_stats(pat_df)
-    return {
-        "ohlcv":     ohlcv,
-        "features":  features,
-        "pat_df":    pat_df,
-        "canoni":    canoni,
-        "stats":     pat_stats,
-    }
-
-
-# ─────────────────────────────────────────────────────────────
-# SIDEBAR
-# ─────────────────────────────────────────────────────────────
+# ── Sidebar ───────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style='padding: 1rem 0 1.5rem 0;'>
-        <div style='font-family:Syne,sans-serif; font-size:1.1rem; font-weight:800;
-                    color:#e8edf5; letter-spacing:-0.02em;'>
-            📊 Equity Patterns
-        </div>
-        <div style='font-family:JetBrains Mono,monospace; font-size:0.65rem;
-                    color:#4a5a75; margin-top:4px; text-transform:uppercase;
-                    letter-spacing:0.1em;'>
-            Pattern Discovery Italia
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    <div style='padding:1rem 0 1.5rem 0;'>
+        <div style='font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#e8edf5;'>📊 Equity Patterns</div>
+        <div style='font-family:JetBrains Mono,monospace;font-size:0.65rem;color:#4a5a75;margin-top:4px;text-transform:uppercase;letter-spacing:0.1em;'>Pattern Discovery — Italia</div>
+    </div>""", unsafe_allow_html=True)
 
-    page = st.radio(
-        "nav",
-        ["📊  Overview",
-         "📉  Mean Reversion",
-         "📖  Metodologia",
-         "📤  Export"],
-        label_visibility="collapsed"
-    )
+    def si(done): return "🟢" if done else "⚪"
+    st.markdown(f"""
+    <div style='font-family:JetBrains Mono,monospace;font-size:0.72rem;color:#4a5a75;margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.1em;'>Avanzamento</div>
+    <div style='font-size:0.78rem;color:#8a9ab5;line-height:2;'>
+        {si(st.session_state.step_data)}    1. Universo & Dati<br>
+        {si(st.session_state.step_feat)}    2. Feature Engineering<br>
+        {si(st.session_state.step_pattern)} 3. Mean Reversion<br>
+        {si(st.session_state.stats is not None)} 4. Risultati
+    </div>""", unsafe_allow_html=True)
 
-    st.markdown("<hr style='border-color:#1e2d47; margin:1.5rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color:#1e2d47;margin:1rem 0;'>", unsafe_allow_html=True)
 
-    # Filtri
-    st.markdown("<div style='font-size:0.65rem; color:#4a5a75; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.5rem;'>Orizzonte forward</div>", unsafe_allow_html=True)
-    H_sel = st.selectbox("H", [3,5,10,15], index=1, label_visibility="collapsed")
+    page = st.radio("nav", [
+        "📥  Universo & Dati",
+        "⚙️  Feature Engineering",
+        "📉  Mean Reversion",
+        "📋  Risultati",
+        "📤  Export",
+    ], label_visibility="collapsed")
 
-    st.markdown("<div style='font-size:0.65rem; color:#4a5a75; text-transform:uppercase; letter-spacing:0.1em; margin-top:0.8rem; margin-bottom:0.5rem;'>Universo ticker</div>", unsafe_allow_html=True)
-    n_tickers = st.slider("N ticker", 5, len(ITALIAN_TICKERS), 20, label_visibility="collapsed")
+    st.markdown("<hr style='border-color:#1e2d47;margin:1rem 0;'>", unsafe_allow_html=True)
 
-    st.markdown("<hr style='border-color:#1e2d47; margin:1.5rem 0;'>", unsafe_allow_html=True)
-
-    if st.button("🔄 Aggiorna dati", use_container_width=True):
-        st.cache_data.clear()
+    if st.button("🔄 Reset progetto", use_container_width=True):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
         st.rerun()
 
-    st.markdown(f"""
-    <div style='font-family:JetBrains Mono,monospace; font-size:0.62rem; color:#4a5a75; margin-top:1rem;'>
-        Universo: {n_tickers} ticker FTSE Italia<br>
-        Periodo: {START_DATE} → oggi<br>
-        <span style='color:#8a9ab5;'>Aggiornato: {datetime.now().strftime('%Y-%m-%d %H:%M')}</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────────────────────
-# LOAD DATA
-# ─────────────────────────────────────────────────────────────
-tickers_to_use = ITALIAN_TICKERS[:n_tickers]
-
-with st.spinner("⚙️  Download dati e calcolo pattern..."):
-    try:
-        DATA = build_all_data()
-        data_ok = DATA is not None and len(DATA.get("stats", {})) > 0
-    except Exception as e:
-        data_ok = False
-        err_msg = str(e)
-
-if not data_ok:
-    st.error("Errore nel caricamento dati. Verifica la connessione internet.")
-    st.stop()
-
-pat_df  = DATA["pat_df"]
-canoni  = DATA["canoni"]
-stats_d = DATA["stats"]
-ohlcv   = DATA["ohlcv"]
-
-# Metriche principali per H selezionato
-m = stats_d.get(H_sel, stats_d.get(5, {}))
-
-n_tickers_ok  = pat_df["ticker"].nunique()
-n_episodi     = int(pat_df["is_canone"].sum())
-avg_ret       = m.get("avg_ret", np.nan)
-hit_rate      = m.get("hit_rate", np.nan)
-lift          = m.get("lift", np.nan)
-p_val         = m.get("p_val", np.nan)
+    if st.session_state.step_data:
+        st.markdown(f"""
+        <div style='font-family:JetBrains Mono,monospace;font-size:0.62rem;color:#4a5a75;margin-top:0.5rem;'>
+            Ticker: <span style='color:#8a9ab5;'>{st.session_state.n_tickers_ok}</span><br>
+            Periodo: <span style='color:#8a9ab5;'>{st.session_state.start_date[:7]} → {st.session_state.end_date[:7]}</span>
+        </div>""", unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════
-# PAGE 1 — OVERVIEW
+# PAGE 1 — UNIVERSO & DATI
 # ═══════════════════════════════════════════════════════════════
-if "Overview" in page:
+if "Universo" in page:
+    st.markdown('<div class="top-bar"><div class="top-bar-title">Universo & Dati</div><div class="top-bar-meta">Step 1 di 4 — Download e pulizia OHLCV</div></div>', unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div class='top-bar'>
-        <div class='top-bar-title'>Equity Pattern Discovery — Italia</div>
-        <div class='top-bar-meta'>
-            <span class='dot-live'></span>LIVE &nbsp;|&nbsp;
-            Universo: {n_tickers_ok} ticker &nbsp;|&nbsp;
-            Periodo: {START_DATE} → {END_DATE}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("""<div class='step-card'><h4>📋 Configurazione universo</h4><p>
+    Seleziona i ticker da analizzare e il periodo storico. Dati OHLCV giornalieri da Yahoo Finance
+    (auto-adjusted per dividendi e split). Pulizia automatica: rimozione variazioni >100% giornaliere.
+    </p></div>""", unsafe_allow_html=True)
 
-    # KPI
-    k1,k2,k3,k4,k5 = st.columns(5)
-    kpis = [
-        ("Ticker analizzati", str(n_tickers_ok), "universo FTSE Italia", "#3b82f6"),
-        ("Episodi canone", str(n_episodi), "shock down confermati", "#8b5cf6"),
-        (f"Avg Return (H={H_sel}gg)", f"{avg_ret*100:.2f}%" if not np.isnan(avg_ret) else "n/a",
-         f"baseline: {m.get('avg_baseline',0)*100:.2f}%", "#10b981" if avg_ret>0 else "#ef4444"),
-        (f"Hit Rate (H={H_sel}gg)", f"{hit_rate:.1%}" if not np.isnan(hit_rate) else "n/a",
-         "% segnali corretti", "#10b981" if hit_rate>0.5 else "#ef4444"),
-        ("P-value", f"{p_val:.3f}" if not np.isnan(p_val) else "n/a",
-         "✅ Significativo" if m.get("sig") else "⚠️ Non sig.", "#10b981" if m.get("sig") else "#f59e0b"),
-    ]
-    for col, (label, val, sub, color) in zip([k1,k2,k3,k4,k5], kpis):
-        with col:
-            st.markdown(f"""
-            <div class='kpi-card'>
-                <div class='kpi-label'>{label}</div>
-                <div class='kpi-value' style='color:{color}; font-size:1.7rem;'>{val}</div>
-                <div class='kpi-sub'>{sub}</div>
-            </div>""", unsafe_allow_html=True)
-
-    # Distribuzione per ticker
-    st.markdown("<div class='section-header'>EPISODI PER TICKER — TOP 15</div>", unsafe_allow_html=True)
-
-    tk_counts = (
-        pat_df[pat_df["is_canone"]==1]
-        .groupby("ticker")
-        .agg(n_episodi=("is_canone","sum"),
-             avg_ret_H=(f"fwd_ret_t{H_sel}","mean"))
-        .reset_index()
-        .sort_values("avg_ret_H", ascending=False)
-        .head(15)
-    )
-    tk_counts["ticker_clean"] = tk_counts["ticker"].str.replace(".MI","",regex=False)
-
-    fig_tk = go.Figure()
-    colors = ["#10b981" if v > 0 else "#ef4444" for v in tk_counts["avg_ret_H"]]
-    fig_tk.add_bar(
-        x=tk_counts["ticker_clean"],
-        y=tk_counts["avg_ret_H"] * 100,
-        marker_color=colors,
-        marker_opacity=0.85,
-        text=[f"{v:.1f}%" for v in tk_counts["avg_ret_H"]*100],
-        textposition="outside",
-        textfont=dict(size=10, color="#8a9ab5"),
-        customdata=tk_counts["n_episodi"],
-        hovertemplate="<b>%{x}</b><br>Avg ret: %{y:.2f}%<br>N episodi: %{customdata}<extra></extra>",
-    )
-    fig_tk.add_hline(y=0, line=dict(color="#4a5a75", width=0.8))
-    fig_tk.update_layout(**PLOTLY_DARK, height=320,
-                         yaxis_title=f"Avg Forward Return H={H_sel}gg (%)",
-                         title=dict(text=""),
-                         xaxis=dict(tickangle=-35, **PLOTLY_DARK["xaxis"]))
-    st.plotly_chart(fig_tk, use_container_width=True)
-
-    # Tabella metriche per orizzonte
-    st.markdown("<div class='section-header'>METRICHE PER ORIZZONTE — SHOCK DOWN MR</div>", unsafe_allow_html=True)
-    rows = []
-    for H, sm in stats_d.items():
-        rows.append({
-            "H (giorni)": H,
-            "N canoni": sm["n_canoni"],
-            "Avg Return": f"{sm['avg_ret']*100:.2f}%",
-            "Avg Baseline": f"{sm['avg_baseline']*100:.2f}%",
-            "Lift": f"{sm['lift']:.2f}x",
-            "Hit Rate": f"{sm['hit_rate']:.1%}",
-            "T-stat": f"{sm['t_stat']:.2f}",
-            "P-value": f"{sm['p_val']:.3f}",
-            "Significativo": "✅" if sm["sig"] else "⚠️",
-        })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-    st.markdown("""
-    <div class='disclaimer'>
-        ⚠️ I risultati mostrati sono calcolati su dati storici con metodologia as-of (nessun look-ahead).
-        Performance passate non sono indicative di risultati futuri. Strumento di supporto alla ricerca.
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════════
-# PAGE 2 — MEAN REVERSION
-# ═══════════════════════════════════════════════════════════════
-elif "Mean Reversion" in page:
-
-    st.markdown("""
-    <div class='top-bar'>
-        <div class='top-bar-title'>Mean Reversion — Shock Down</div>
-        <div class='top-bar-meta'>Pattern: shock_down_mr &nbsp;|&nbsp; Azionario Italia</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div style='margin-bottom:1.5rem;'>
-        <span class='pattern-badge'>SHOCK DOWN MEAN REVERSION</span>
-        <span style='font-family:JetBrains Mono,monospace; font-size:0.75rem;
-                     color:#4a5a75; margin-left:1rem;'>
-            W={SHOCK_PARAMS['W']}gg | Wz={SHOCK_PARAMS['Wz']}gg |
-            z-soglia={SHOCK_PARAMS['zsog']} | H={SHOCK_PARAMS['H']}gg
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # KPI row
-    k1,k2,k3,k4 = st.columns(4)
-    for col, (label, val, sub, color) in zip([k1,k2,k3,k4], [
-        ("Episodi canone", str(n_episodi), f"su {n_tickers_ok} ticker", "#8b5cf6"),
-        (f"Avg Ret H={H_sel}gg", f"{avg_ret*100:.2f}%" if not np.isnan(avg_ret) else "n/a",
-         f"baseline: {m.get('avg_baseline',0)*100:.2f}%", "#10b981" if avg_ret>0 else "#ef4444"),
-        ("Hit Rate", f"{hit_rate:.1%}" if not np.isnan(hit_rate) else "n/a",
-         "% episodi con ret > 0", "#10b981" if hit_rate>0.5 else "#ef4444"),
-        ("Lift vs baseline", f"{lift:.2f}x" if not np.isnan(lift) else "n/a",
-         f"p-val: {p_val:.3f} {'✅' if m.get('sig') else '⚠️'}", "#10b981" if lift>1 else "#ef4444"),
-    ]):
-        with col:
-            st.markdown(f"""
-            <div class='kpi-card'>
-                <div class='kpi-label'>{label}</div>
-                <div class='kpi-value' style='color:{color}; font-size:1.6rem;'>{val}</div>
-                <div class='kpi-sub'>{sub}</div>
-            </div>""", unsafe_allow_html=True)
-
-    # ── Grafico 1: Distribuzione forward return canoni vs baseline ──
-    st.markdown("<div class='section-header'>DISTRIBUZIONE FORWARD RETURN — CANONI vs BASELINE</div>", unsafe_allow_html=True)
-
-    fwd_col = f"fwd_ret_t{H_sel}"
-    if fwd_col in pat_df.columns:
-        y_can_plot = canoni[fwd_col].dropna() * 100
-        y_all_plot = pat_df[fwd_col].dropna() * 100
-
-        fig_dist = go.Figure()
-        fig_dist.add_histogram(
-            x=y_all_plot, nbinsx=80,
-            marker_color="#4a5a75", opacity=0.5,
-            histnorm="probability density",
-            name=f"Tutti i giorni (baseline)"
-        )
-        fig_dist.add_histogram(
-            x=y_can_plot, nbinsx=60,
-            marker_color="#8b5cf6", opacity=0.8,
-            histnorm="probability density",
-            name=f"Episodi canone (n={len(y_can_plot)})"
-        )
-        fig_dist.add_vline(x=float(y_can_plot.mean()),
-                           line=dict(color="#a78bfa", dash="dash", width=2),
-                           annotation_text=f"Media canoni: {y_can_plot.mean():.2f}%",
-                           annotation_font_color="#a78bfa", annotation_font_size=10)
-        fig_dist.add_vline(x=float(y_all_plot.mean()),
-                           line=dict(color="#4a5a75", dash="dot", width=1),
-                           annotation_text=f"Baseline: {y_all_plot.mean():.2f}%",
-                           annotation_font_color="#4a5a75", annotation_font_size=10)
-        fig_dist.add_vline(x=0, line=dict(color="#8a9ab5", width=0.8))
-        fig_dist.update_layout(**PLOTLY_DARK, height=320,
-                               xaxis_title=f"Forward Return H={H_sel}gg (%)",
-                               yaxis_title="Densità",
-                               barmode="overlay",
-                               title=dict(text=""))
-        st.plotly_chart(fig_dist, use_container_width=True)
-
-    # ── Grafico 2: Forward return cumulativo per orizzonte ──
-    st.markdown("<div class='section-header'>PROFILO RENDIMENTO CUMULATIVO — H=1 → 15 GIORNI</div>", unsafe_allow_html=True)
-
-    fwd_means_can  = []
-    fwd_means_base = []
-    fwd_h_list     = []
-    for H in range(1, 16):
-        fc = f"fwd_ret_t{H}"
-        if fc in pat_df.columns:
-            fwd_h_list.append(H)
-            fwd_means_can.append(canoni[fc].mean() * 100)
-            fwd_means_base.append(pat_df[fc].mean() * 100)
-
-    if fwd_h_list:
-        fig_fwd = go.Figure()
-        fig_fwd.add_scatter(
-            x=fwd_h_list, y=fwd_means_base,
-            mode="lines+markers",
-            line=dict(color="#4a5a75", dash="dash", width=1.5),
-            marker=dict(size=5),
-            name="Baseline (tutti i giorni)"
-        )
-        fig_fwd.add_scatter(
-            x=fwd_h_list, y=fwd_means_can,
-            mode="lines+markers",
-            line=dict(color="#8b5cf6", width=2.5),
-            marker=dict(size=7, symbol="circle"),
-            fill="tonexty",
-            fillcolor="rgba(139,92,246,0.08)",
-            name="Episodi canone"
-        )
-        fig_fwd.add_hline(y=0, line=dict(color="#4a5a75", width=0.8))
-        fig_fwd.update_layout(**PLOTLY_DARK, height=280,
-                              xaxis_title="Orizzonte (giorni)",
-                              yaxis_title="Avg Forward Return (%)",
-                              title=dict(text=""))
-        st.plotly_chart(fig_fwd, use_container_width=True)
-
-    # ── Grafico 3: Stabilità temporale ──
-    col_temp, col_tk = st.columns(2)
-
-    with col_temp:
-        st.markdown("<div class='section-header'>STABILITÀ TEMPORALE — LIFT PER ANNO</div>", unsafe_allow_html=True)
-        if fwd_col in canoni.columns:
-            canoni_y = canoni.copy()
-            canoni_y["year"] = canoni_y["date"].dt.year
-            pat_y = pat_df.copy()
-            pat_y["year"] = pat_y["date"].dt.year
-
-            yearly_can  = canoni_y.groupby("year")[fwd_col].mean()
-            yearly_base = pat_y.groupby("year")[fwd_col].mean()
-            lift_yr     = (yearly_can / yearly_base).replace([np.inf,-np.inf], np.nan).dropna()
-            n_yr        = canoni_y.groupby("year").size()
-
-            fig_yr = make_subplots(specs=[[{"secondary_y": True}]])
-            bar_colors = ["#10b981" if v >= 1 else "#ef4444" for v in lift_yr.values]
-            fig_yr.add_bar(
-                x=lift_yr.index.astype(str), y=lift_yr.values,
-                marker_color=bar_colors, opacity=0.8,
-                name="Lift annuale", secondary_y=False
-            )
-            fig_yr.add_scatter(
-                x=n_yr.reindex(lift_yr.index).index.astype(str),
-                y=n_yr.reindex(lift_yr.index).values,
-                mode="lines+markers",
-                line=dict(color="#f59e0b", width=1.5),
-                marker=dict(size=5),
-                name="N episodi", secondary_y=True
-            )
-            fig_yr.add_hline(y=1.0, line=dict(color="#4a5a75", dash="dash", width=1))
-            fig_yr.update_layout(**PLOTLY_DARK, height=260,
-                                 title=dict(text=""),
-                                 legend=dict(bgcolor="rgba(0,0,0,0)"))
-            fig_yr.update_yaxes(title_text="Lift (>1 = sovra-baseline)", secondary_y=False,
-                                gridcolor="#1e2d47", tickfont=dict(size=10))
-            fig_yr.update_yaxes(title_text="N episodi", secondary_y=True,
-                                gridcolor="rgba(0,0,0,0)", tickfont=dict(size=10))
-            st.plotly_chart(fig_yr, use_container_width=True)
-
-    with col_tk:
-        st.markdown("<div class='section-header'>TOP 10 TICKER PER AVG RETURN</div>", unsafe_allow_html=True)
-        per_tk_df = m.get("per_ticker", pd.DataFrame())
-        if not per_tk_df.empty:
-            top10 = per_tk_df.head(10).copy()
-            top10["ticker_clean"] = top10["ticker"].str.replace(".MI","",regex=False)
-            fig_top = go.Figure()
-            fig_top.add_bar(
-                x=top10["ticker_clean"],
-                y=top10["avg_ret"] * 100,
-                marker_color=["#10b981" if v>0 else "#ef4444" for v in top10["avg_ret"]],
-                opacity=0.85,
-                text=[f"{v:.1f}%" for v in top10["avg_ret"]*100],
-                textposition="outside",
-                textfont=dict(size=10, color="#8a9ab5"),
-            )
-            fig_top.add_hline(y=0, line=dict(color="#4a5a75", width=0.8))
-            fig_top.update_layout(**PLOTLY_DARK, height=260,
-                                  yaxis_title="Avg Ret (%)",
-                                  title=dict(text=""),
-                                  showlegend=False)
-            st.plotly_chart(fig_top, use_container_width=True)
-
-    # ── Ultimo episodio per ticker ──
-    st.markdown("<div class='section-header'>ULTIMI EPISODI RILEVATI</div>", unsafe_allow_html=True)
-    last_eps = (
-        canoni.sort_values("date")
-        .groupby("ticker")
-        .last()
-        .reset_index()
-        [["ticker","date","close","z_score",fwd_col]]
-        .rename(columns={
-            "ticker":"Ticker","date":"Data","close":"Prezzo chiusura",
-            "z_score":"Z-score","fwd_col":f"Ret H={H_sel}gg"
-        })
-        .sort_values("Data", ascending=False)
-        .head(20)
-    )
-    last_eps["Data"] = pd.to_datetime(last_eps["Data"]).dt.strftime("%Y-%m-%d")
-    last_eps["Z-score"] = last_eps["Z-score"].round(2)
-    last_eps["Ticker"] = last_eps["Ticker"].str.replace(".MI","",regex=False)
-    st.dataframe(last_eps, use_container_width=True, hide_index=True, height=350)
-
-    st.markdown("""
-    <div class='disclaimer'>
-        ⚠️ Il segnale è calcolato as-of su dati storici. I parametri (W, Wz, z-soglia) sono stati
-        calibrati su in-sample e non modificati su out-of-sample per evitare look-ahead bias.
-        Non costituisce raccomandazione di investimento ai sensi di MiFID II.
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════════
-# PAGE 3 — METODOLOGIA
-# ═══════════════════════════════════════════════════════════════
-elif "Metodologia" in page:
-
-    st.markdown("<h2 style='margin-bottom:0.3rem;'>Metodologia</h2>", unsafe_allow_html=True)
-    st.markdown("<div style='font-family:JetBrains Mono,monospace; font-size:0.75rem; color:#4a5a75; margin-bottom:1.5rem;'>Framework Pattern Discovery — Azionario Italia v1.0</div>", unsafe_allow_html=True)
-
-    st.markdown("""
-    <div class='chain-box'>
-        Universo ~30 ticker FTSE Italia
-        &nbsp;→&nbsp; OHLCV giornaliero yfinance
-        &nbsp;→&nbsp; Feature primitive (ret, vol, range)
-        &nbsp;→&nbsp; Z-score rolling shock negativo
-        &nbsp;→&nbsp; Candidato → Canone (min gap 5gg)
-        &nbsp;→&nbsp; Forward return H=3,5,10,15gg
-        &nbsp;→&nbsp; Metriche: lift, hit rate, t-test
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("""
-        <div class='method-card'>
-            <h4>📡 Fonte dati</h4>
-            <p>
-            Yahoo Finance via yfinance — dati OHLCV giornalieri aggiustati per dividendi
-            e split (auto_adjust=True). Universo: principali titoli FTSE MIB e Mid Cap Italia.
-            Pulizia: rimozione variazioni giornaliere anomale (>100%) che indicano
-            errori nel dato o eventi straordinari non rappresentativi.
-            </p>
-        </div>
-        <div class='method-card'>
-            <h4>📐 Logica del pattern Shock Down</h4>
-            <p>
-            Un titolo che registra un return cumulativo su W giorni molto inferiore
-            alla sua media storica (z-score fortemente negativo) può presentare
-            condizioni di ipervenduto tecnico e potenziale mean reversion.<br><br>
-            <b>Formula z-score:</b><br>
-            z = (ret_cumW − μ_rolling) / σ_rolling<br><br>
-            <b>Candidato:</b> z &lt; soglia E close nel bottom cp% del range giornaliero<br>
-            <b>Canone:</b> candidato con almeno 5 giorni di gap dall'episodio precedente
-            (evita cluster di segnali sullo stesso movimento)
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("""
-        <div class='method-card'>
-            <h4>🔒 Blindatura anti-overfitting</h4>
-            <p>
-            I parametri ottimali (W, Wz, z-soglia, cp) vengono scelti dalla grid search
-            <b>prima</b> di guardare la distribuzione dei forward return. Questa procedura —
-            chiamata "blindatura" — è la difesa principale contro il look-ahead bias e
-            l'overfitting sui dati storici.<br><br>
-            Il criterio di selezione è il <b>lift per-ticker</b> (media dei lift
-            su tutti i ticker dell'universo), non il return assoluto massimo.
-            Questo garantisce generalizzazione cross-sectional.
-            </p>
-        </div>
-        <div class='method-card'>
-            <h4>📊 Forward return e metriche</h4>
-            <p>
-            Il forward return a H giorni è calcolato come:<br>
-            fwd_ret_tH = close_{t+H} / close_t − 1<br><br>
-            Winsorizzato a ±50% per eliminare outlier estremi.<br><br>
-            <b>Lift</b> = avg_ret_canoni / avg_ret_baseline<br>
-            <b>Hit Rate</b> = % episodi con fwd_ret > 0<br>
-            <b>T-test</b>: H0: media = 0, p &lt; 0.10 = significativo<br><br>
-            La stabilità temporale del lift per anno è il principale
-            indicatore di robustezza out-of-sample.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Tabella parametri
-    st.markdown("<div class='section-header'>PARAMETRI CORRENTI — SHOCK DOWN MR</div>", unsafe_allow_html=True)
-    params_df = pd.DataFrame([
-        {"Parametro":"W", "Valore":SHOCK_PARAMS["W"], "Descrizione":"Finestra return cumulativo (giorni)"},
-        {"Parametro":"Wz","Valore":SHOCK_PARAMS["Wz"],"Descrizione":"Finestra rolling z-score (giorni)"},
-        {"Parametro":"z-soglia","Valore":SHOCK_PARAMS["zsog"],"Descrizione":"Soglia z-score (sotto = candidato shock)"},
-        {"Parametro":"cp","Valore":SHOCK_PARAMS["cp"],"Descrizione":"Close position max nel range giornaliero (0=low, 1=high)"},
-        {"Parametro":"H","Valore":SHOCK_PARAMS["H"],"Descrizione":"Orizzonte forward return per ottimizzazione"},
-        {"Parametro":"min_gap","Valore":5,"Descrizione":"Giorni minimi tra episodi consecutivi stesso ticker"},
-    ])
-    st.dataframe(params_df, use_container_width=True, hide_index=True)
-
-    st.markdown("""
-    <div class='disclaimer'>
-        ⚠️ Posizionamento commerciale: strumento di supporto alla ricerca quantitativa.
-        Non costituisce consulenza in materia di investimenti ai sensi di MiFID II.
-        I segnali identificano anomalie statistiche storiche — non garantiscono performance future.
-        Il sistema deve essere usato come input supplementare al processo di investimento,
-        non come sistema di trading autonomo.
-    </div>
-    """, unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════════
-# PAGE 4 — EXPORT
-# ═══════════════════════════════════════════════════════════════
-elif "Export" in page:
-
-    st.markdown("<h2 style='margin-bottom:0.3rem;'>Export</h2>", unsafe_allow_html=True)
-    st.markdown("<div style='font-family:JetBrains Mono,monospace; font-size:0.75rem; color:#4a5a75; margin-bottom:1.5rem;'>Esporta risultati pattern discovery in Excel o CSV</div>", unsafe_allow_html=True)
-
-    col_a, col_b = st.columns(2)
-
+    col_a, col_b = st.columns([2,1])
     with col_a:
-        st.markdown("<div class='section-header'>EXPORT EXCEL — REPORT COMPLETO</div>", unsafe_allow_html=True)
-        st.markdown("""
-        <div class='method-card'>
-            <h4>📊 Contenuto report Excel</h4>
-            <p>
-            • Foglio 1: Tutti gli episodi canone con date e ticker<br>
-            • Foglio 2: Metriche per orizzonte (lift, hit rate, t-test)<br>
-            • Foglio 3: Performance per ticker<br>
-            • Foglio 4: Parametri del modello<br>
-            • Foglio 5: Sommario esecutivo
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-
-            # Foglio 1: Episodi canone
-            ep_export = canoni[
-                ["date","ticker","close","z_score","is_canone"] +
-                [f"fwd_ret_t{H}" for H in HORIZONS if f"fwd_ret_t{H}" in canoni.columns]
-            ].copy()
-            ep_export["date"] = ep_export["date"].dt.strftime("%Y-%m-%d")
-            ep_export.sort_values("date", ascending=False).to_excel(
-                writer, sheet_name="Episodi Canone", index=False
-            )
-
-            # Foglio 2: Metriche per orizzonte
-            rows = []
-            for H, sm in stats_d.items():
-                rows.append({
-                    "Orizzonte (giorni)": H,
-                    "N canoni": sm["n_canoni"],
-                    "Avg Return": sm["avg_ret"],
-                    "Avg Baseline": sm["avg_baseline"],
-                    "Lift": sm["lift"],
-                    "Hit Rate": sm["hit_rate"],
-                    "T-statistic": sm["t_stat"],
-                    "P-value": sm["p_val"],
-                    "Significativo": sm["sig"],
-                })
-            pd.DataFrame(rows).to_excel(writer, sheet_name="Metriche Orizzonte", index=False)
-
-            # Foglio 3: Per ticker
-            per_tk = stats_d.get(H_sel, {}).get("per_ticker", pd.DataFrame())
-            if not per_tk.empty:
-                per_tk.to_excel(writer, sheet_name="Performance Ticker", index=False)
-
-            # Foglio 4: Parametri
-            pd.DataFrame([
-                {"Param":"W","Valore":SHOCK_PARAMS["W"]},
-                {"Param":"Wz","Valore":SHOCK_PARAMS["Wz"]},
-                {"Param":"zsog","Valore":SHOCK_PARAMS["zsog"]},
-                {"Param":"cp","Valore":SHOCK_PARAMS["cp"]},
-                {"Param":"H","Valore":SHOCK_PARAMS["H"]},
-            ]).to_excel(writer, sheet_name="Parametri Modello", index=False)
-
-            # Foglio 5: Sommario
-            m5 = stats_d.get(5, {})
-            pd.DataFrame([
-                ["Sistema","Equity Pattern Discovery v1.0"],
-                ["Pattern","Shock Down Mean Reversion"],
-                ["Data generazione", datetime.now().strftime("%Y-%m-%d %H:%M")],
-                ["Periodo dati", f"{START_DATE} → {END_DATE}"],
-                ["Ticker analizzati", n_tickers_ok],
-                ["Episodi canone totali", n_episodi],
-                ["Avg Return H=5gg", f"{m5.get('avg_ret',0)*100:.2f}%"],
-                ["Hit Rate H=5gg", f"{m5.get('hit_rate',0):.1%}"],
-                ["Lift H=5gg", f"{m5.get('lift',0):.2f}x"],
-                ["P-value H=5gg", f"{m5.get('p_val',1):.3f}"],
-                ["Disclaimer","Supporto alla ricerca. Non è consulenza MiFID II."],
-            ], columns=["Parametro","Valore"]).to_excel(
-                writer, sheet_name="Sommario", index=False
-            )
-
-        output.seek(0)
-        st.download_button(
-            label="📥 Download Report Excel",
-            data=output,
-            file_name=f"EquityPatterns_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-        )
+        st.markdown("<div class='section-header'>TICKER</div>", unsafe_allow_html=True)
+        mode = st.radio("Input", ["Lista predefinita","Inserimento manuale","Upload CSV"], horizontal=True, label_visibility="collapsed")
+        if mode == "Lista predefinita":
+            sel = st.multiselect("Ticker", DEFAULT_TICKERS, default=DEFAULT_TICKERS[:15], label_visibility="collapsed")
+            tickers_final = sel
+        elif mode == "Inserimento manuale":
+            raw = st.text_area("es. ENI.MI, ENEL.MI", height=80, label_visibility="collapsed", placeholder="ENI.MI, ENEL.MI, ISP.MI...")
+            tickers_final = [t.strip().upper() for t in raw.replace("\n",",").split(",") if t.strip()]
+        else:
+            up = st.file_uploader("CSV con colonna ticker", type=["csv"])
+            if up:
+                dfu = pd.read_csv(up)
+                tickers_final = dfu["ticker"].tolist() if "ticker" in dfu.columns else []
+            else:
+                tickers_final = []
+        st.caption(f"{len(tickers_final)} ticker selezionati")
 
     with col_b:
-        st.markdown("<div class='section-header'>EXPORT CSV — EPISODI CANONE</div>", unsafe_allow_html=True)
-        st.markdown("""
-        <div class='method-card'>
-            <h4>📄 Contenuto CSV</h4>
-            <p>
-            Tutti gli episodi canone in formato CSV leggero.<br>
-            Importabile in Excel, Bloomberg o qualsiasi sistema
-            di portfolio management.<br><br>
-            Colonne: data, ticker, prezzo, z-score,
-            forward return per H=3,5,10,15 giorni.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>PERIODO</div>", unsafe_allow_html=True)
+        start_d = st.date_input("Inizio", value=date(2018,1,1), min_value=date(2010,1,1), max_value=date.today(), label_visibility="collapsed")
+        end_d   = st.date_input("Fine",   value=date.today(),   min_value=date(2010,1,1), max_value=date.today(), label_visibility="collapsed")
 
-        csv_ep = canoni[
-            ["date","ticker","close","z_score"] +
-            [f"fwd_ret_t{H}" for H in HORIZONS if f"fwd_ret_t{H}" in canoni.columns]
-        ].copy()
-        csv_ep["date"] = csv_ep["date"].dt.strftime("%Y-%m-%d")
-        csv_ep = csv_ep.sort_values("date", ascending=False)
+    st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
+    if st.button("▶️ Scarica dati OHLCV", disabled=len(tickers_final)==0):
+        with st.spinner(""):
+            ohlcv = download_ohlcv(tickers_final, str(start_d), str(end_d))
+        if ohlcv.empty:
+            st.error("Nessun dato. Verifica ticker e connessione.")
+        else:
+            st.session_state.update({
+                "ohlcv":ohlcv,"step_data":True,"step_feat":False,
+                "step_pattern":False,"stats":None,
+                "n_tickers_ok":ohlcv["ticker"].nunique(),
+                "start_date":str(start_d),"end_date":str(end_d),
+            })
+            st.rerun()
 
-        st.download_button(
-            label="📥 Download CSV Episodi",
-            data=csv_ep.to_csv(index=False),
-            file_name=f"ShockDownEpisodi_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True,
+    if st.session_state.step_data and st.session_state.ohlcv is not None:
+        ohlcv = st.session_state.ohlcv
+        st.markdown("<div class='section-header'>RIEPILOGO</div>", unsafe_allow_html=True)
+        k1,k2,k3,k4 = st.columns(4)
+        for col,(lbl,val,sub,col_) in zip([k1,k2,k3,k4],[
+            ("Ticker caricati",str(ohlcv["ticker"].nunique()),"con ≥60 sessioni","#10b981"),
+            ("Righe totali",f"{len(ohlcv):,}","osservazioni OHLCV","#3b82f6"),
+            ("Periodo effettivo",ohlcv["date"].min().strftime("%b %Y"),f"→ {ohlcv['date'].max().strftime('%b %Y')}","#8b5cf6"),
+            ("Obs/ticker",f"{len(ohlcv)//ohlcv['ticker'].nunique():.0f}","media per ticker","#06b6d4"),
+        ]):
+            with col:
+                st.markdown(f"<div class='kpi-card'><div class='kpi-label'>{lbl}</div><div class='kpi-value' style='color:{col_};'>{val}</div><div class='kpi-sub'>{sub}</div></div>", unsafe_allow_html=True)
+
+        st.markdown("<div class='section-header'>ANTEPRIMA CANDLESTICK</div>", unsafe_allow_html=True)
+        tk_opts = [t.replace(".MI","")+" ("+t+")" for t in ohlcv["ticker"].unique()[:20]]
+        tk_sel  = st.selectbox("Ticker", tk_opts, label_visibility="collapsed")
+        tk_code = tk_sel.split("(")[1].rstrip(")")
+        sub_p   = ohlcv[ohlcv["ticker"]==tk_code].tail(60)
+        fig_c   = go.Figure()
+        fig_c.add_candlestick(
+            x=sub_p["date"],
+            open=sub_p.get("open", sub_p["close"]),
+            high=sub_p.get("high", sub_p["close"]),
+            low=sub_p.get("low",  sub_p["close"]),
+            close=sub_p["close"],
+            increasing_line_color="#10b981", decreasing_line_color="#ef4444"
         )
+        fig_c.update_layout(**PLOTLY_DARK, height=200, yaxis_title="Prezzo (€)", title=dict(text=""))
+        st.plotly_chart(fig_c, use_container_width=True)
+        st.markdown("<div style='font-family:JetBrains Mono,monospace;font-size:0.72rem;color:#10b981;'>✅ Dati pronti → Step 2 Feature Engineering</div>", unsafe_allow_html=True)
 
-        st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
-        st.markdown("<div class='section-header'>ANTEPRIMA — ULTIMI 15 EPISODI</div>", unsafe_allow_html=True)
-        preview = csv_ep.head(15).copy()
-        preview["ticker"] = preview["ticker"].str.replace(".MI","",regex=False)
-        st.dataframe(preview, use_container_width=True, hide_index=True, height=320)
+
+# ═══════════════════════════════════════════════════════════════
+# PAGE 2 — FEATURE ENGINEERING
+# ═══════════════════════════════════════════════════════════════
+elif "Feature" in page:
+    st.markdown('<div class="top-bar"><div class="top-bar-title">Feature Engineering</div><div class="top-bar-meta">Step 2 di 4 — Feature primitive e forward returns</div></div>', unsafe_allow_html=True)
+
+    if not st.session_state.step_data:
+        st.warning("⚠️ Prima completa Step 1 — Universo & Dati"); st.stop()
+
+    st.markdown("""<div class='step-card'><h4>⚙️ Feature costruite automaticamente</h4><p>
+    <b>Prezzo:</b> ret_1d, prev_close, delta_close &nbsp;|&nbsp;
+    <b>Candle:</b> range_day, body, lower/upper_shadow, close_pos_in_range, body_range_ratio &nbsp;|&nbsp;
+    <b>Gap:</b> gap_abs, gap_pct, true_range &nbsp;|&nbsp;
+    <b>Volume:</b> vol_ratio (vs media 20gg) &nbsp;|&nbsp;
+    <b>Forward returns:</b> fwd_ret_t1 → fwd_ret_tH_max (winsorizzati ±50%)
+    </p></div>""", unsafe_allow_html=True)
+
+    col_cfg, col_btn = st.columns([2,1])
+    with col_cfg:
+        h_max = st.slider("H_max — Orizzonte massimo forward return", 5, 20, 15, 5)
+        st.caption(f"Costruirà fwd_ret_t1 ... fwd_ret_t{h_max} | Input: {len(st.session_state.ohlcv):,} righe")
+    with col_btn:
+        st.markdown("<div style='height:1.8rem;'></div>", unsafe_allow_html=True)
+        run_feat = st.button("▶️ Costruisci feature", use_container_width=True)
+
+    if run_feat:
+        with st.spinner("Costruzione feature in corso..."):
+            feats = build_features(st.session_state.ohlcv, h_max=h_max)
+        st.session_state.update({"features":feats,"step_feat":True,"step_pattern":False,"stats":None})
+        st.rerun()
+
+    if st.session_state.step_feat and st.session_state.features is not None:
+        feats = st.session_state.features
+        fwd_cols = [c for c in feats.columns if c.startswith("fwd_ret_t")]
+        st.markdown("<div class='section-header'>RIEPILOGO</div>", unsafe_allow_html=True)
+        k1,k2,k3,k4 = st.columns(4)
+        for col,(lbl,val,sub,c) in zip([k1,k2,k3,k4],[
+            ("Righe dataset",f"{len(feats):,}","dopo pulizia","#10b981"),
+            ("Feature primitive",str(len([c for c in feats.columns if not c.startswith("fwd_")])),"prezzo+candle+gap","#3b82f6"),
+            ("Forward returns",str(len(fwd_cols)),f"H=1→{len(fwd_cols)}","#8b5cf6"),
+            ("Ticker",str(feats["ticker"].nunique()),"con feature complete","#06b6d4"),
+        ]):
+            with col:
+                st.markdown(f"<div class='kpi-card'><div class='kpi-label'>{lbl}</div><div class='kpi-value' style='color:{c};'>{val}</div><div class='kpi-sub'>{sub}</div></div>", unsafe_allow_html=True)
+
+        col_d, col_f = st.columns(2)
+        with col_d:
+            st.markdown("<div class='section-header'>DISTRIBUZIONE ret_1d</div>", unsafe_allow_html=True)
+            rets = feats["ret_1d"].dropna()*100
+            fig_r = go.Figure()
+            fig_r.add_histogram(x=rets, nbinsx=100, marker_color="#3b82f6", opacity=0.8, histnorm="probability density")
+            fig_r.add_vline(x=0, line=dict(color="#4a5a75", width=1))
+            fig_r.update_layout(**PLOTLY_DARK, height=230, xaxis_title="ret_1d (%)", yaxis_title="Densità",
+                                showlegend=False, title=dict(text=f"μ={rets.mean():.3f}%  σ={rets.std():.2f}%"))
+            st.plotly_chart(fig_r, use_container_width=True)
+
+        with col_f:
+            st.markdown("<div class='section-header'>BASELINE DRIFT PER ORIZZONTE</div>", unsafe_allow_html=True)
+            hh = list(range(1, len(fwd_cols)+1))
+            means = [feats[f"fwd_ret_t{H}"].mean()*100 for H in hh if f"fwd_ret_t{H}" in feats.columns]
+            fig_f = go.Figure()
+            fig_f.add_scatter(x=hh, y=means, mode="lines+markers", line=dict(color="#8b5cf6", width=2), marker=dict(size=5))
+            fig_f.add_hline(y=0, line=dict(color="#4a5a75", width=0.8))
+            fig_f.update_layout(**PLOTLY_DARK, height=230, xaxis_title="H (giorni)", yaxis_title="Avg fwd ret (%)", showlegend=False, title=dict(text=""))
+            st.plotly_chart(fig_f, use_container_width=True)
+
+        st.markdown("<div style='font-family:JetBrains Mono,monospace;font-size:0.72rem;color:#10b981;'>✅ Feature pronte → Step 3 Mean Reversion</div>", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+# PAGE 3 — MEAN REVERSION
+# ═══════════════════════════════════════════════════════════════
+elif "Mean Reversion" in page:
+    st.markdown('<div class="top-bar"><div class="top-bar-title">Mean Reversion — Shock Down</div><div class="top-bar-meta">Step 3 di 4 — Parametri e identificazione episodi canone</div></div>', unsafe_allow_html=True)
+
+    if not st.session_state.step_feat:
+        st.warning("⚠️ Prima completa Step 2 — Feature Engineering"); st.stop()
+
+    st.markdown("""<div class='step-card'><h4>📉 Logica del pattern Shock Down MR</h4><p>
+    Il titolo registra un return cumulativo su <b>W giorni</b> con z-score inferiore alla soglia
+    (shock negativo anomalo rispetto alla storia). Il filtro <b>close position</b> conferma
+    la debolezza intraday. La <b>blindatura</b> garantisce che i parametri vengano scelti
+    prima di osservare i forward return — elimina il look-ahead bias.
+    </p></div>""", unsafe_allow_html=True)
+
+    st.markdown("<div class='section-header'>PARAMETRI</div>", unsafe_allow_html=True)
+    c1,c2,c3 = st.columns(3)
+    with c1:
+        W    = st.slider("W — Return cumulativo (gg)", 2, 20, 5)
+        Wz   = st.slider("Wz — Z-score rolling (gg)", 60, 252, 120)
+    with c2:
+        zsog = st.slider("Z-score soglia", -4.0, -0.5, -2.0, 0.1)
+        cp   = st.slider("Close position max", 0.1, 1.0, 0.35, 0.05)
+    with c3:
+        min_gap = st.slider("Min gap episodi (gg)", 3, 20, 5)
+
+    st.markdown(f"""<div style='background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.2);border-radius:6px;padding:0.7rem 1rem;margin:0.8rem 0;font-family:JetBrains Mono,monospace;font-size:0.73rem;color:#a78bfa;'>
+    cum_ret = pct_change({W}) &nbsp;|&nbsp; z = (cum_ret − μ{Wz}d) / σ{Wz}d &nbsp;|&nbsp; candidato: z &lt; {zsog} AND close_pos &lt; {cp} &nbsp;|&nbsp; min_gap = {min_gap}gg
+    </div>""", unsafe_allow_html=True)
+
+    if st.button("▶️ Identifica episodi canone", use_container_width=False):
+        params = {"W":W,"Wz":Wz,"zsog":zsog,"cp":cp,"min_gap":min_gap}
+        with st.spinner("Identificazione episodi..."):
+            pat_df = detect_shock_down(st.session_state.features, params)
+            canoni = pat_df[pat_df["is_canone_shock_down"]==1].copy()
+        if len(canoni) < 10:
+            st.error(f"Solo {len(canoni)} episodi. Prova ad allargare le soglie.")
+        else:
+            fwd_av = [H for H in HORIZONS if f"fwd_ret_t{H}" in pat_df.columns]
+            with st.spinner("Calcolo metriche..."):
+                sr = compute_stats(pat_df, canoni, horizons=fwd_av)
+            st.session_state.update({"pat_df":pat_df,"canoni":canoni,"stats":sr,"pat_params":params,"step_pattern":True})
+            st.rerun()
+
+    if st.session_state.step_pattern and st.session_state.stats is not None:
+        m5 = st.session_state.stats.get(5, st.session_state.stats[list(st.session_state.stats.keys())[0]])
+        n_ep = len(st.session_state.canoni)
+        st.markdown("<div class='section-header'>PREVIEW RISULTATI</div>", unsafe_allow_html=True)
+        k1,k2,k3,k4 = st.columns(4)
+        for col,(lbl,val,sub,c) in zip([k1,k2,k3,k4],[
+            ("Episodi canone",str(n_ep),f"su {st.session_state.pat_df['ticker'].nunique()} ticker","#8b5cf6"),
+            ("Avg Ret H=5gg",f"{m5.get('avg_ret',0)*100:.2f}%",f"baseline: {m5.get('avg_baseline',0)*100:.2f}%","#10b981" if m5.get("avg_ret",0)>0 else "#ef4444"),
+            ("Hit Rate H=5gg",f"{m5.get('hit_rate',0):.1%}","% episodi ret>0","#10b981" if m5.get("hit_rate",0)>0.5 else "#ef4444"),
+            ("Lift H=5gg",f"{m5.get('lift',0):.2f}x",f"p={m5.get('p_val',1):.3f} {'✅' if m5.get('sig') else '⚠️'}","#10b981" if m5.get("lift",0)>1 else "#ef4444"),
+        ]):
+            with col:
+                st.markdown(f"<div class='kpi-card'><div class='kpi-label'>{lbl}</div><div class='kpi-value' style='color:{c};font-size:1.5rem;'>{val}</div><div class='kpi-sub'>{sub}</div></div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-family:JetBrains Mono,monospace;font-size:0.72rem;color:#10b981;margin-top:1rem;'>✅ Episodi identificati → Step 4 Risultati per analisi completa</div>", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+# PAGE 4 — RISULTATI
+# ═══════════════════════════════════════════════════════════════
+elif "Risultati" in page:
+    st.markdown('<div class="top-bar"><div class="top-bar-title">Risultati — Analisi Statistica</div><div class="top-bar-meta">Step 4 di 4 — Distribuzione, lift, stabilità, breakdown ticker</div></div>', unsafe_allow_html=True)
+
+    if st.session_state.stats is None:
+        st.warning("⚠️ Prima completa Step 3 — Mean Reversion"); st.stop()
+
+    sr     = st.session_state.stats
+    canoni = st.session_state.canoni
+    pat_df = st.session_state.pat_df
+    H_list = list(sr.keys())
+
+    H_sel = st.select_slider("Orizzonte", options=H_list, value=H_list[1] if len(H_list)>1 else H_list[0])
+    m = sr[H_sel]
+
+    k1,k2,k3,k4,k5 = st.columns(5)
+    for col,(lbl,val,sub,c) in zip([k1,k2,k3,k4,k5],[
+        ("Episodi",str(m["n_canoni"]),f"{pat_df['ticker'].nunique()} ticker","#8b5cf6"),
+        ("Avg Return",f"{m['avg_ret']*100:.2f}%",f"baseline: {m['avg_baseline']*100:.2f}%","#10b981" if m["avg_ret"]>0 else "#ef4444"),
+        ("Hit Rate",f"{m['hit_rate']:.1%}","% episodi ret>0","#10b981" if m["hit_rate"]>0.5 else "#ef4444"),
+        ("Lift",f"{m['lift']:.2f}x","vs baseline","#10b981" if m["lift"]>1 else "#ef4444"),
+        ("P-value",f"{m['p_val']:.4f}","✅ sig." if m["sig"] else "⚠️ non sig.","#10b981" if m["sig"] else "#f59e0b"),
+    ]):
+        with col:
+            st.markdown(f"<div class='kpi-card'><div class='kpi-label'>{lbl}</div><div class='kpi-value' style='color:{c};font-size:1.5rem;'>{val}</div><div class='kpi-sub'>{sub}</div></div>", unsafe_allow_html=True)
+
+    # Distribuzione
+    st.markdown("<div class='section-header'>DISTRIBUZIONE FORWARD RETURN — CANONI vs BASELINE</div>", unsafe_allow_html=True)
+    fc = f"fwd_ret_t{H_sel}"
+    yc = canoni[fc].dropna()*100
+    ya = pat_df[fc].dropna()*100
+    fig_d = go.Figure()
+    fig_d.add_histogram(x=ya, nbinsx=80, marker_color="#4a5a75", opacity=0.45, histnorm="probability density", name="Baseline")
+    fig_d.add_histogram(x=yc, nbinsx=60, marker_color="#8b5cf6", opacity=0.85, histnorm="probability density", name=f"Canoni (n={len(yc)})")
+    fig_d.add_vline(x=float(yc.mean()), line=dict(color="#a78bfa", dash="dash", width=2),
+                   annotation_text=f"Canoni μ={yc.mean():.2f}%", annotation_font_color="#a78bfa", annotation_font_size=10)
+    fig_d.add_vline(x=float(ya.mean()), line=dict(color="#4a5a75", dash="dot", width=1.5),
+                   annotation_text=f"Baseline μ={ya.mean():.2f}%", annotation_font_color="#4a5a75", annotation_font_size=10)
+    fig_d.add_vline(x=0, line=dict(color="#8a9ab5", width=0.8))
+    fig_d.update_layout(**PLOTLY_DARK, height=280, xaxis_title=f"Forward Return H={H_sel}gg (%)", yaxis_title="Densità", barmode="overlay", title=dict(text=""))
+    st.plotly_chart(fig_d, use_container_width=True)
+
+    # Profilo + Lift
+    cl, cr = st.columns(2)
+    with cl:
+        st.markdown("<div class='section-header'>PROFILO RENDIMENTO H=1→MAX</div>", unsafe_allow_html=True)
+        hh, cm, bm = [], [], []
+        for H in range(1, max(H_list)+1):
+            if f"fwd_ret_t{H}" in pat_df.columns:
+                hh.append(H); cm.append(canoni[f"fwd_ret_t{H}"].mean()*100); bm.append(pat_df[f"fwd_ret_t{H}"].mean()*100)
+        fig_p = go.Figure()
+        fig_p.add_scatter(x=hh, y=bm, mode="lines+markers", line=dict(color="#4a5a75", dash="dash", width=1.5), marker=dict(size=5), name="Baseline")
+        fig_p.add_scatter(x=hh, y=cm, mode="lines+markers", line=dict(color="#8b5cf6", width=2.5), marker=dict(size=7), fill="tonexty", fillcolor="rgba(139,92,246,0.08)", name="Canoni")
+        if H_sel in hh:
+            idx = hh.index(H_sel)
+            fig_p.add_scatter(x=[H_sel], y=[cm[idx]], mode="markers", marker=dict(color="#f59e0b", size=12, symbol="star"), name=f"H={H_sel}")
+        fig_p.add_hline(y=0, line=dict(color="#4a5a75", width=0.8))
+        fig_p.update_layout(**PLOTLY_DARK, height=250, xaxis_title="H (giorni)", yaxis_title="Avg Return (%)", title=dict(text=""))
+        st.plotly_chart(fig_p, use_container_width=True)
+
+    with cr:
+        st.markdown("<div class='section-header'>LIFT E HIT RATE PER ORIZZONTE</div>", unsafe_allow_html=True)
+        lv = [sr[H]["lift"] for H in H_list]
+        hv = [sr[H]["hit_rate"] for H in H_list]
+        fig_l = make_subplots(specs=[[{"secondary_y":True}]])
+        fig_l.add_bar(x=[f"H={H}" for H in H_list], y=lv, marker_color=["#10b981" if v>1 else "#ef4444" for v in lv], opacity=0.8, name="Lift", secondary_y=False)
+        fig_l.add_scatter(x=[f"H={H}" for H in H_list], y=[v*100 for v in hv], mode="lines+markers", line=dict(color="#f59e0b", width=2), marker=dict(size=8), name="Hit Rate (%)", secondary_y=True)
+        fig_l.add_hline(y=1.0, line=dict(color="#4a5a75", dash="dash", width=1), secondary_y=False)
+        fig_l.add_hline(y=50, line=dict(color="#4a5a75", dash="dot", width=1), secondary_y=True)
+        fig_l.update_layout(**PLOTLY_DARK, height=250, title=dict(text=""))
+        fig_l.update_yaxes(title_text="Lift", gridcolor="#1e2d47", secondary_y=False)
+        fig_l.update_yaxes(title_text="Hit Rate (%)", gridcolor="rgba(0,0,0,0)", secondary_y=True)
+        st.plotly_chart(fig_l, use_container_width=True)
+
+    # Stabilità temporale + Top ticker
+    cl2, cr2 = st.columns(2)
+    with cl2:
+        st.markdown("<div class='section-header'>STABILITÀ TEMPORALE — LIFT ANNUALE</div>", unsafe_allow_html=True)
+        ly = m.get("lift_yr", pd.Series(dtype=float))
+        ny = m.get("n_yr",    pd.Series(dtype=int))
+        if len(ly)>0:
+            fig_y = make_subplots(specs=[[{"secondary_y":True}]])
+            fig_y.add_bar(x=ly.index.astype(str), y=ly.values, marker_color=["#10b981" if v>=1 else "#ef4444" for v in ly.values], opacity=0.8, name="Lift", secondary_y=False)
+            fig_y.add_scatter(x=ny.reindex(ly.index).index.astype(str), y=ny.reindex(ly.index).values, mode="lines+markers", line=dict(color="#f59e0b",width=1.5), marker=dict(size=5), name="N ep.", secondary_y=True)
+            fig_y.add_hline(y=1.0, line=dict(color="#4a5a75", dash="dash", width=1))
+            fig_y.update_layout(**PLOTLY_DARK, height=250, title=dict(text=""))
+            fig_y.update_yaxes(title_text="Lift", gridcolor="#1e2d47", secondary_y=False)
+            fig_y.update_yaxes(title_text="N episodi", gridcolor="rgba(0,0,0,0)", secondary_y=True)
+            st.plotly_chart(fig_y, use_container_width=True)
+
+    with cr2:
+        st.markdown("<div class='section-header'>TOP TICKER PER AVG RETURN</div>", unsafe_allow_html=True)
+        ptk = m.get("per_ticker", pd.DataFrame())
+        if not ptk.empty:
+            top = ptk.head(12)
+            fig_t = go.Figure()
+            fig_t.add_bar(x=top["ticker"], y=top["avg_ret"]*100, marker_color=["#10b981" if v>0 else "#ef4444" for v in top["avg_ret"]], opacity=0.85,
+                          text=[f"{v:.1f}%" for v in top["avg_ret"]*100], textposition="outside", textfont=dict(size=10,color="#8a9ab5"))
+            fig_t.add_hline(y=0, line=dict(color="#4a5a75", width=0.8))
+            fig_t.update_layout(**PLOTLY_DARK, height=250, yaxis_title="Avg Ret (%)", showlegend=False, title=dict(text=""), xaxis=dict(tickangle=-35,**PLOTLY_DARK["xaxis"]))
+            st.plotly_chart(fig_t, use_container_width=True)
+
+    # Tabella completa
+    st.markdown("<div class='section-header'>TABELLA METRICHE COMPLETA</div>", unsafe_allow_html=True)
+    rows = [{"H":H,"N canoni":s["n_canoni"],"Avg Return":f"{s['avg_ret']*100:.3f}%","Baseline":f"{s['avg_baseline']*100:.3f}%",
+             "Lift":f"{s['lift']:.3f}x","Hit Rate":f"{s['hit_rate']:.1%}","T-stat":f"{s['t_stat']:.2f}",
+             "P-value":f"{s['p_val']:.4f}","Sig.":"✅" if s["sig"] else "⚠️"} for H,s in sr.items()]
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # Ultimi episodi
+    st.markdown("<div class='section-header'>ULTIMI EPISODI CANONE</div>", unsafe_allow_html=True)
+    sc = ["date","ticker","close","z_score_mr",fc]
+    sc = [c for c in sc if c in canoni.columns]
+    le = canoni[sc].copy().sort_values("date",ascending=False).head(25)
+    le["date"] = pd.to_datetime(le["date"]).dt.strftime("%Y-%m-%d")
+    le["ticker"] = le["ticker"].str.replace(".MI","",regex=False)
+    le["z_score_mr"] = le["z_score_mr"].round(2)
+    le[fc] = (le[fc]*100).round(2).astype(str)+"%"
+    le = le.rename(columns={"date":"Data","ticker":"Ticker","close":"Prezzo","z_score_mr":"Z-score",fc:f"Ret H={H_sel}gg"})
+    st.dataframe(le, use_container_width=True, hide_index=True, height=380)
+
+    st.markdown("""<div class='disclaimer'>
+    ⚠️ I parametri sono stati scelti prima di osservare i forward return (blindatura anti-overfitting).
+    I risultati mostrano evidenze statistiche su dati storici. Non costituiscono previsioni né
+    raccomandazioni di investimento ai sensi di MiFID II. Strumento di supporto alla ricerca quantitativa.
+    </div>""", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+# PAGE 5 — EXPORT
+# ═══════════════════════════════════════════════════════════════
+elif "Export" in page:
+    st.markdown('<div class="top-bar"><div class="top-bar-title">Export</div><div class="top-bar-meta">Scarica i risultati</div></div>', unsafe_allow_html=True)
+
+    if st.session_state.stats is None:
+        st.warning("⚠️ Completa prima l'analisi (Step 1→4)"); st.stop()
+
+    sr     = st.session_state.stats
+    canoni = st.session_state.canoni
+    pat_df = st.session_state.pat_df
+    params = st.session_state.pat_params
+    H_list = list(sr.keys())
+    m5     = sr.get(5, sr[H_list[0]])
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("<div class='section-header'>REPORT EXCEL</div>", unsafe_allow_html=True)
+        out = io.BytesIO()
+        with pd.ExcelWriter(out, engine="openpyxl") as w:
+            fcs = [f"fwd_ret_t{H}" for H in H_list if f"fwd_ret_t{H}" in canoni.columns]
+            ep  = canoni[["date","ticker","close","z_score_mr"]+fcs].copy()
+            ep["date"] = ep["date"].dt.strftime("%Y-%m-%d")
+            ep.sort_values("date",ascending=False).to_excel(w, sheet_name="Episodi Canone", index=False)
+            rows = [{"H":H,"N canoni":s["n_canoni"],"Avg Ret":s["avg_ret"],"Baseline":s["avg_baseline"],"Lift":s["lift"],"Hit Rate":s["hit_rate"],"T-stat":s["t_stat"],"P-value":s["p_val"],"Sig.":s["sig"]} for H,s in sr.items()]
+            pd.DataFrame(rows).to_excel(w, sheet_name="Metriche", index=False)
+            ptk = sr.get(5,{}).get("per_ticker",pd.DataFrame())
+            if not ptk.empty:
+                ptk.to_excel(w, sheet_name="Per Ticker", index=False)
+            pd.DataFrame([{"Param":k,"Val":v} for k,v in params.items()]).to_excel(w, sheet_name="Parametri", index=False)
+            pd.DataFrame([
+                ["Pattern","Shock Down Mean Reversion"],
+                ["Data",datetime.now().strftime("%Y-%m-%d %H:%M")],
+                ["Periodo",f"{st.session_state.start_date} → {st.session_state.end_date}"],
+                ["Ticker",pat_df["ticker"].nunique()],["Episodi",len(canoni)],
+                ["Avg Ret H=5",f"{m5['avg_ret']*100:.3f}%"],["Lift H=5",f"{m5['lift']:.3f}x"],
+                ["P-value H=5",f"{m5['p_val']:.4f}"],["Disclaimer","Supporto ricerca. Non consulenza MiFID II."],
+            ], columns=["K","V"]).to_excel(w, sheet_name="Sommario", index=False)
+        out.seek(0)
+        st.download_button("📥 Download Excel", data=out,
+                           file_name=f"PatternDiscovery_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True)
+
+    with col_b:
+        st.markdown("<div class='section-header'>CSV EPISODI</div>", unsafe_allow_html=True)
+        fcs2 = [f"fwd_ret_t{H}" for H in H_list if f"fwd_ret_t{H}" in canoni.columns]
+        csv  = canoni[["date","ticker","close","z_score_mr"]+fcs2].copy()
+        csv["date"] = csv["date"].dt.strftime("%Y-%m-%d")
+        st.download_button("📥 Download CSV", data=csv.sort_values("date",ascending=False).to_csv(index=False),
+                           file_name=f"Episodi_{datetime.now().strftime('%Y%m%d')}.csv",
+                           mime="text/csv", use_container_width=True)
+        st.markdown("<div style='height:0.5rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>ANTEPRIMA</div>", unsafe_allow_html=True)
+        prev = csv.head(12).copy()
+        prev["ticker"] = prev["ticker"].str.replace(".MI","",regex=False)
+        st.dataframe(prev, use_container_width=True, hide_index=True, height=300)
